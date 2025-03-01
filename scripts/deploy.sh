@@ -266,11 +266,49 @@ EOF
     log_info "升级pip到最新版本..."
     $ABSOLUTE_PATH/venv/bin/pip install --upgrade pip
     
-    # 安装依赖，一个一个安装以避免一个包失败导致全部失败
-    log_info "逐个安装依赖..."
+    # 确保pip可用
+    if ! $ABSOLUTE_PATH/venv/bin/pip --version &> /dev/null; then
+        log_warn "pip可能不可用，尝试重新安装..."
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+        $ABSOLUTE_PATH/venv/bin/python get-pip.py
+        rm get-pip.py
+    fi
+    
+    # 先安装核心依赖
+    log_info "安装核心依赖..."
+    CORE_DEPS=("pymysql" "python-dotenv" "requests")
+    
+    for dep in "${CORE_DEPS[@]}"; do
+        log_info "安装核心依赖: $dep"
+        # 尝试多次安装
+        for i in {1..3}; do
+            log_info "尝试安装 $dep (尝试 $i/3)..."
+            $ABSOLUTE_PATH/venv/bin/pip install $dep -i https://pypi.org/simple
+            
+            if $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+                log_info "核心依赖 $dep 安装成功"
+                break
+            else
+                if [ $i -eq 3 ]; then
+                    log_error "核心依赖 $dep 安装失败，尝试使用其他源..."
+                    # 尝试使用其他源
+                    $ABSOLUTE_PATH/venv/bin/pip install $dep -i https://mirrors.aliyun.com/pypi/simple/
+                    
+                    if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+                        log_error "核心依赖 $dep 安装失败，请检查网络连接或手动安装"
+                    else
+                        log_info "使用备用源安装 $dep 成功"
+                    fi
+                fi
+            fi
+        done
+    done
+    
+    # 安装其他依赖
+    log_info "安装其他依赖..."
     while IFS= read -r package || [[ -n "$package" ]]; do
-        # 跳过注释和空行
-        if [[ $package == \#* ]] || [[ -z "${package// }" ]]; then
+        # 跳过注释、空行和核心依赖
+        if [[ $package == \#* ]] || [[ -z "${package// }" ]] || [[ " ${CORE_DEPS[@]} " =~ " ${package%%==*} " ]]; then
             continue
         fi
         
@@ -284,7 +322,6 @@ EOF
     
     # 检查核心依赖是否安装成功
     log_info "检查核心依赖..."
-    CORE_DEPS=("pymysql" "python-dotenv" "requests")
     MISSING_DEPS=()
     
     for dep in "${CORE_DEPS[@]}"; do
@@ -295,8 +332,39 @@ EOF
     
     if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         log_error "以下核心依赖安装失败: ${MISSING_DEPS[*]}"
-        log_error "请手动安装这些依赖后继续"
-        exit 1
+        log_error "尝试手动安装这些依赖..."
+        
+        # 尝试使用系统包管理器安装
+        OS=$(detect_os)
+        if [[ $OS == *"Ubuntu"* ]] || [[ $OS == *"Debian"* ]]; then
+            for dep in "${MISSING_DEPS[@]}"; do
+                log_info "尝试使用apt安装 python3-$dep..."
+                apt install -y python3-$dep
+            done
+        elif [[ $OS == *"CentOS"* ]] || [[ $OS == *"Red Hat"* ]] || [[ $OS == *"Fedora"* ]]; then
+            for dep in "${MISSING_DEPS[@]}"; do
+                log_info "尝试使用yum安装 python3-$dep..."
+                yum install -y python3-$dep
+            done
+        fi
+        
+        # 再次检查
+        MISSING_DEPS=()
+        for dep in "${CORE_DEPS[@]}"; do
+            if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+                MISSING_DEPS+=("$dep")
+            fi
+        done
+        
+        if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+            log_error "仍然无法安装以下核心依赖: ${MISSING_DEPS[*]}"
+            log_error "请手动安装这些依赖后继续"
+            log_info "您可以尝试以下命令手动安装:"
+            for dep in "${MISSING_DEPS[@]}"; do
+                echo "$ABSOLUTE_PATH/venv/bin/pip install $dep -i https://pypi.org/simple"
+            done
+            exit 1
+        fi
     fi
     
     log_info "依赖安装成功"

@@ -23,11 +23,76 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 检查命令是否存在
+# 检测系统类型
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$NAME
+    elif type lsb_release >/dev/null 2>&1; then
+        OS=$(lsb_release -si)
+    elif [ -f /etc/lsb-release ]; then
+        . /etc/lsb-release
+        OS=$DISTRIB_ID
+    elif [ -f /etc/debian_version ]; then
+        OS="Debian"
+    elif [ -f /etc/redhat-release ]; then
+        OS="CentOS"
+    else
+        OS=$(uname -s)
+    fi
+    
+    echo $OS
+}
+
+# 安装基础依赖
+install_base_dependencies() {
+    OS=$(detect_os)
+    log_info "检测到系统: $OS"
+    
+    # 检查是否有root权限
+    if [ "$(id -u)" != "0" ]; then
+        log_warn "当前不是root用户，可能无法安装某些依赖"
+        read -p "是否继续? (y/n): " continue_install
+        if [[ $continue_install != "y" && $continue_install != "Y" ]]; then
+            log_info "安装已取消"
+            exit 0
+        fi
+    fi
+    
+    if [[ $OS == *"Ubuntu"* ]] || [[ $OS == *"Debian"* ]]; then
+        log_info "使用apt安装基础依赖..."
+        apt update -y
+        apt install -y python3 python3-dev python3-pip python3-venv libmysqlclient-dev build-essential bc
+    elif [[ $OS == *"CentOS"* ]] || [[ $OS == *"Red Hat"* ]] || [[ $OS == *"Fedora"* ]]; then
+        log_info "使用yum安装基础依赖..."
+        yum update -y
+        yum install -y python3 python3-devel python3-pip mysql-devel gcc bc
+    else
+        log_warn "未识别的操作系统: $OS，请手动安装依赖"
+    fi
+}
+
+# 检查并安装命令
 check_command() {
     if ! command -v $1 &> /dev/null; then
-        log_error "$1 命令未找到，请先安装"
-        exit 1
+        log_warn "$1 命令未找到，尝试安装..."
+        
+        OS=$(detect_os)
+        if [[ $OS == *"Ubuntu"* ]] || [[ $OS == *"Debian"* ]]; then
+            apt install -y $2
+        elif [[ $OS == *"CentOS"* ]] || [[ $OS == *"Red Hat"* ]] || [[ $OS == *"Fedora"* ]]; then
+            yum install -y $2
+        else
+            log_error "$1 命令未找到，请手动安装"
+            exit 1
+        fi
+        
+        if ! command -v $1 &> /dev/null; then
+            log_error "$1 安装失败"
+            exit 1
+        fi
+        
+        log_info "$1 安装成功"
     fi
 }
 
@@ -204,14 +269,45 @@ test_run() {
     fi
 }
 
+# 下载项目函数
+download_project() {
+    # 如果当前目录不是项目目录，则下载项目
+    if [ ! -f "README.md" ] || ! grep -q "网易新闻爬虫系统" "README.md"; then
+        log_info "下载项目文件..."
+        
+        # 检查并安装curl
+        check_command curl curl
+        
+        # 检查并安装unzip
+        check_command unzip unzip
+        
+        # 下载项目
+        curl -L https://github.com/kentPhilippines/wiseflow_python/archive/refs/heads/main.zip -o wiseflow_python.zip
+        
+        # 解压项目
+        unzip -o wiseflow_python.zip
+        
+        # 进入项目目录
+        cd wiseflow_python-main
+        
+        # 设置部署脚本可执行权限
+        chmod +x scripts/deploy.sh
+        
+        log_info "项目下载完成，开始部署..."
+    fi
+}
+
 # 主函数
 main() {
     log_info "开始部署网易新闻爬虫系统..."
     
-    # 检查必要命令
-    check_command python3
-    check_command pip
-    check_command bc
+    # 安装基础依赖
+    install_base_dependencies
+    
+    # 检查并安装必要命令
+    check_command python3 python3
+    check_command pip3 python3-pip
+    check_command bc bc
     
     # 检查Python版本
     check_python_version
@@ -247,6 +343,12 @@ main() {
     log_info "2. 按计划运行爬虫: ./start.sh --schedule"
     log_info "3. 导出数据: python scripts/export_data.py"
 }
+
+# 检查是否是通过curl直接执行的脚本
+if [[ "$0" == "bash" ]] || [[ "$0" == "/bin/bash" ]] || [[ "$0" == "-bash" ]] || [[ "$0" == "/usr/bin/bash" ]]; then
+    # 通过curl执行的情况
+    download_project
+fi
 
 # 执行主函数
 main 

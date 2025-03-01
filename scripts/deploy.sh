@@ -243,18 +243,52 @@ fake-useragent==1.1.3
 schedule==1.2.0
 EOF
         log_info "已创建基本的requirements.txt文件"
+    else
+        # 检查并移除concurrent-futures依赖
+        if grep -q "concurrent-futures" requirements.txt; then
+            log_warn "发现concurrent-futures依赖，这在Python 3.x中是不需要的，正在移除..."
+            sed -i '/concurrent-futures/d' requirements.txt
+            log_info "已移除concurrent-futures依赖"
+        fi
     fi
     
     # 升级pip
     log_info "升级pip到最新版本..."
     pip install --upgrade pip
     
-    # 安装依赖
-    pip install -r requirements.txt
-    if [ $? -ne 0 ]; then
-        log_error "安装依赖失败"
+    # 安装依赖，一个一个安装以避免一个包失败导致全部失败
+    log_info "逐个安装依赖..."
+    while IFS= read -r package || [[ -n "$package" ]]; do
+        # 跳过注释和空行
+        if [[ $package == \#* ]] || [[ -z "${package// }" ]]; then
+            continue
+        fi
+        
+        log_info "安装: $package"
+        pip install $package
+        
+        if [ $? -ne 0 ]; then
+            log_warn "安装 $package 失败，尝试继续安装其他依赖..."
+        fi
+    done < requirements.txt
+    
+    # 检查核心依赖是否安装成功
+    log_info "检查核心依赖..."
+    CORE_DEPS=("pymysql" "python-dotenv" "requests")
+    MISSING_DEPS=()
+    
+    for dep in "${CORE_DEPS[@]}"; do
+        if ! python -c "import $dep" &> /dev/null; then
+            MISSING_DEPS+=("$dep")
+        fi
+    done
+    
+    if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+        log_error "以下核心依赖安装失败: ${MISSING_DEPS[*]}"
+        log_error "请手动安装这些依赖后继续"
         exit 1
     fi
+    
     log_info "依赖安装成功"
 }
 

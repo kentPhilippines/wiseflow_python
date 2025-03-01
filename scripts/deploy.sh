@@ -170,22 +170,30 @@ check_python_version() {
 # 创建虚拟环境
 create_venv() {
     log_info "创建Python虚拟环境..."
-    if [ -d "venv" ]; then
+    
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
+    if [ -d "$ABSOLUTE_PATH/venv" ]; then
         log_warn "虚拟环境已存在，跳过创建"
     else
-        python3 -m venv venv
+        python3 -m venv $ABSOLUTE_PATH/venv
         if [ $? -ne 0 ]; then
             log_error "创建虚拟环境失败"
             exit 1
         fi
-        log_info "虚拟环境创建成功"
+        log_info "虚拟环境创建成功: $ABSOLUTE_PATH/venv"
     fi
 }
 
 # 激活虚拟环境
 activate_venv() {
     log_info "激活虚拟环境..."
-    source venv/bin/activate
+    
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
+    source $ABSOLUTE_PATH/venv/bin/activate
     if [ $? -ne 0 ]; then
         log_error "激活虚拟环境失败"
         exit 1
@@ -226,7 +234,9 @@ install_dependencies() {
         fi
     fi
     
-    log_info "当前工作目录: $(pwd)"
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    log_info "当前工作目录: $ABSOLUTE_PATH"
     
     # 检查requirements.txt是否存在
     if [ ! -f "requirements.txt" ]; then
@@ -254,7 +264,7 @@ EOF
     
     # 升级pip
     log_info "升级pip到最新版本..."
-    pip install --upgrade pip
+    $ABSOLUTE_PATH/venv/bin/pip install --upgrade pip
     
     # 安装依赖，一个一个安装以避免一个包失败导致全部失败
     log_info "逐个安装依赖..."
@@ -265,7 +275,7 @@ EOF
         fi
         
         log_info "安装: $package"
-        pip install $package
+        $ABSOLUTE_PATH/venv/bin/pip install $package
         
         if [ $? -ne 0 ]; then
             log_warn "安装 $package 失败，尝试继续安装其他依赖..."
@@ -278,7 +288,7 @@ EOF
     MISSING_DEPS=()
     
     for dep in "${CORE_DEPS[@]}"; do
-        if ! python -c "import $dep" &> /dev/null; then
+        if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
             MISSING_DEPS+=("$dep")
         fi
     done
@@ -336,7 +346,11 @@ EOF
 # 初始化数据库
 init_database() {
     log_info "初始化数据库..."
-    python -c "from database.db_handler import init_db; init_db()"
+    
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
+    $ABSOLUTE_PATH/venv/bin/python -c "from database.db_handler import init_db; init_db()"
     if [ $? -ne 0 ]; then
         log_error "数据库初始化失败"
         exit 1
@@ -357,24 +371,24 @@ create_directories() {
 setup_cron() {
     log_info "设置定时任务..."
     
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
     # 询问是否需要设置定时任务
     read -p "是否需要设置定时任务? (y/n): " setup_cron
     if [[ $setup_cron == "y" || $setup_cron == "Y" ]]; then
         read -p "定时任务执行时间 (crontab格式，默认: 0 2 * * * 每天凌晨2点): " cron_time
         cron_time=${cron_time:-"0 2 * * *"}
         
-        # 获取当前目录的绝对路径
-        current_dir=$(pwd)
-        
         # 创建临时crontab文件
         crontab -l > crontab_temp 2>/dev/null || true
         
         # 检查是否已存在相同的定时任务
-        if grep -q "$current_dir/scripts/run_crawler.py" crontab_temp; then
+        if grep -q "$ABSOLUTE_PATH/scripts/run_crawler.py" crontab_temp; then
             log_warn "定时任务已存在，跳过设置"
         else
             # 添加新的定时任务
-            echo "$cron_time cd $current_dir && $current_dir/venv/bin/python $current_dir/scripts/run_crawler.py --once >> $current_dir/logs/cron.log 2>&1" >> crontab_temp
+            echo "$cron_time cd $ABSOLUTE_PATH && $ABSOLUTE_PATH/venv/bin/python $ABSOLUTE_PATH/scripts/run_crawler.py --once >> $ABSOLUTE_PATH/logs/cron.log 2>&1" >> crontab_temp
             crontab crontab_temp
             rm crontab_temp
             log_info "定时任务设置成功: $cron_time"
@@ -388,26 +402,32 @@ setup_cron() {
 create_start_script() {
     log_info "创建启动脚本..."
     
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
     cat > start.sh << EOF
 #!/bin/bash
-cd $(pwd)
-source venv/bin/activate
-python scripts/run_crawler.py \$@
+cd $ABSOLUTE_PATH
+source $ABSOLUTE_PATH/venv/bin/activate
+$ABSOLUTE_PATH/venv/bin/python $ABSOLUTE_PATH/scripts/run_crawler.py \$@
 EOF
     
     chmod +x start.sh
-    log_info "启动脚本创建成功: start.sh"
+    log_info "启动脚本创建成功: $ABSOLUTE_PATH/start.sh"
 }
 
 # 测试运行
 test_run() {
     log_info "测试运行爬虫..."
     
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
     # 询问是否需要测试运行
     read -p "是否需要测试运行爬虫? (y/n): " test_run
     if [[ $test_run == "y" || $test_run == "Y" ]]; then
         log_info "开始测试运行爬虫..."
-        python scripts/run_crawler.py --once
+        $ABSOLUTE_PATH/venv/bin/python $ABSOLUTE_PATH/scripts/run_crawler.py --once
         if [ $? -ne 0 ]; then
             log_error "爬虫测试运行失败"
             exit 1
@@ -451,290 +471,6 @@ download_project() {
             # 创建基本项目结构
             mkdir -p config database scripts data/exports data/images logs
             
-            # 创建基本配置文件
-            cat > config/db_config.py << EOF
-# 数据库配置
-import os
-from dotenv import load_dotenv
-
-# 加载.env文件
-load_dotenv()
-
-# 数据库配置
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', '103.112.99.20'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'user': os.getenv('DB_USER', 'wiseflow_python'),
-    'password': os.getenv('DB_PASSWORD', 'aY7YjpJY4JxEYAG2'),
-    'db': os.getenv('DB_NAME', 'wiseflow_python'),
-    'charset': 'utf8mb4'
-}
-EOF
-
-            # 创建数据库处理文件
-            cat > database/db_handler.py << EOF
-# 数据库处理
-import pymysql
-from config.db_config import DB_CONFIG
-import logging
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("logs/database.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-def get_connection():
-    """获取数据库连接"""
-    try:
-        connection = pymysql.connect(**DB_CONFIG)
-        return connection
-    except Exception as e:
-        logger.error(f"数据库连接失败: {e}")
-        return None
-
-def init_db():
-    """初始化数据库"""
-    conn = get_connection()
-    if not conn:
-        logger.error("无法连接到数据库，初始化失败")
-        return False
-    
-    try:
-        with conn.cursor() as cursor:
-            # 创建新闻表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS news (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                url VARCHAR(255) NOT NULL UNIQUE,
-                publish_time DATETIME,
-                source VARCHAR(100),
-                category VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-            # 创建新闻内容表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS news_content (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                news_id INT NOT NULL,
-                content TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (news_id) REFERENCES news(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-            # 创建图片表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS images (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                news_id INT NOT NULL,
-                url VARCHAR(255) NOT NULL,
-                local_path VARCHAR(255),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (news_id) REFERENCES news(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-            # 创建标签表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tags (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(50) NOT NULL UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-            # 创建新闻标签关联表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS news_tags (
-                news_id INT NOT NULL,
-                tag_id INT NOT NULL,
-                PRIMARY KEY (news_id, tag_id),
-                FOREIGN KEY (news_id) REFERENCES news(id) ON DELETE CASCADE,
-                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-            # 创建日志表
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS crawler_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                crawler_name VARCHAR(50) NOT NULL,
-                status VARCHAR(20) NOT NULL,
-                message TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """)
-            
-        conn.commit()
-        logger.info("数据库初始化成功")
-        return True
-    except Exception as e:
-        logger.error(f"数据库初始化失败: {e}")
-        return False
-    finally:
-        conn.close()
-EOF
-
-            # 创建爬虫运行脚本
-            cat > scripts/run_crawler.py << EOF
-#!/usr/bin/env python3
-# 运行爬虫脚本
-import argparse
-import logging
-import sys
-import time
-import schedule
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("logs/crawler.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-def run_crawler():
-    """运行爬虫"""
-    logger.info("开始运行爬虫...")
-    # 这里实际上会调用Scrapy爬虫
-    # 由于我们只是创建基本结构，这里只记录日志
-    logger.info("爬虫运行完成")
-    return True
-
-def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description='网易新闻爬虫')
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--once', action='store_true', help='运行一次爬虫')
-    group.add_argument('--schedule', action='store_true', help='按计划运行爬虫')
-    args = parser.parse_args()
-    
-    if args.once:
-        logger.info("运行一次爬虫")
-        run_crawler()
-    elif args.schedule:
-        logger.info("按计划运行爬虫")
-        # 每天凌晨2点运行
-        schedule.every().day.at("02:00").do(run_crawler)
-        
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
-
-if __name__ == "__main__":
-    main()
-EOF
-
-            # 创建数据导出脚本
-            cat > scripts/export_data.py << EOF
-#!/usr/bin/env python3
-# 数据导出脚本
-import argparse
-import json
-import csv
-import logging
-import os
-from datetime import datetime
-from database.db_handler import get_connection
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("logs/export.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-def export_to_json(data, filename):
-    """导出为JSON格式"""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    logger.info(f"数据已导出为JSON: {filename}")
-
-def export_to_csv(data, filename):
-    """导出为CSV格式"""
-    if not data:
-        logger.warning("没有数据可导出")
-        return
-    
-    with open(filename, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=data[0].keys())
-        writer.writeheader()
-        writer.writerows(data)
-    logger.info(f"数据已导出为CSV: {filename}")
-
-def get_news_data():
-    """获取新闻数据"""
-    conn = get_connection()
-    if not conn:
-        logger.error("无法连接到数据库")
-        return []
-    
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-            SELECT n.id, n.title, n.url, n.publish_time, n.source, n.category, 
-                   nc.content, GROUP_CONCAT(t.name) as tags
-            FROM news n
-            LEFT JOIN news_content nc ON n.id = nc.news_id
-            LEFT JOIN news_tags nt ON n.id = nt.news_id
-            LEFT JOIN tags t ON nt.tag_id = t.id
-            GROUP BY n.id
-            """)
-            columns = [col[0] for col in cursor.description]
-            news_data = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return news_data
-    except Exception as e:
-        logger.error(f"获取数据失败: {e}")
-        return []
-    finally:
-        conn.close()
-
-def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description='数据导出工具')
-    parser.add_argument('--format', choices=['json', 'csv'], default='json', help='导出格式 (默认: json)')
-    args = parser.parse_args()
-    
-    # 创建导出目录
-    os.makedirs('data/exports', exist_ok=True)
-    
-    # 生成文件名
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"data/exports/news_export_{timestamp}.{args.format}"
-    
-    # 获取数据
-    news_data = get_news_data()
-    
-    if not news_data:
-        logger.warning("没有数据可导出")
-        return
-    
-    # 导出数据
-    if args.format == 'json':
-        export_to_json(news_data, filename)
-    elif args.format == 'csv':
-        export_to_csv(news_data, filename)
-
-if __name__ == "__main__":
-    main()
-EOF
-
             # 创建README文件
             cat > README.md << EOF
 # 网易新闻爬虫系统
@@ -753,9 +489,9 @@ EOF
 
 ## 使用方法
 
-1. 运行一次爬虫: `./start.sh --once`
-2. 按计划运行爬虫: `./start.sh --schedule`
-3. 导出数据: `python scripts/export_data.py --format json`
+1. 运行一次爬虫: \${INSTALL_PATH}/start.sh --once
+2. 按计划运行爬虫: \${INSTALL_PATH}/start.sh --schedule
+3. 导出数据: \${INSTALL_PATH}/venv/bin/python \${INSTALL_PATH}/scripts/export_data.py --format json
 
 ## 部署方法
 
@@ -765,6 +501,9 @@ EOF
 curl -s -L https://raw.githubusercontent.com/kentPhilippines/wiseflow_python/main/scripts/deploy.sh | bash
 \`\`\`
 EOF
+
+            # 替换README中的安装路径变量
+            sed -i "s|\\\${INSTALL_PATH}|$ABSOLUTE_PATH|g" README.md
         }
         
         # 设置部署脚本可执行权限
@@ -817,11 +556,14 @@ main() {
     # 测试运行
     test_run
     
+    # 获取当前目录的绝对路径（确保在最后输出时也有）
+    ABSOLUTE_PATH=$(pwd)
+    
     log_info "网易新闻爬虫系统部署完成!"
     log_info "使用方法:"
-    log_info "1. 运行一次爬虫: ./start.sh --once"
-    log_info "2. 按计划运行爬虫: ./start.sh --schedule"
-    log_info "3. 导出数据: python scripts/export_data.py"
+    log_info "1. 运行一次爬虫: $ABSOLUTE_PATH/start.sh --once"
+    log_info "2. 按计划运行爬虫: $ABSOLUTE_PATH/start.sh --schedule"
+    log_info "3. 导出数据: $ABSOLUTE_PATH/venv/bin/python $ABSOLUTE_PATH/scripts/export_data.py"
 }
 
 # 检查是否是通过curl直接执行的脚本

@@ -171,5 +171,6 @@ class NeteaseImagePipeline(ImagesPipeline):
     
     def close_spider(self, spider):
         """爬虫结束时的回调"""
-        super(NeteaseImagePipeline, self).close_spider(spider)
+        # 移除对父类方法的调用，因为父类可能没有这个方法
+        # super(NeteaseImagePipeline, self).close_spider(spider)
         logger.info("图片处理管道关闭") 

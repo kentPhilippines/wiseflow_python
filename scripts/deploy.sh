@@ -246,6 +246,7 @@ scrapy==2.8.0
 pymysql==1.0.3
 python-dotenv==1.0.0
 requests==2.31.0
+urllib3<2.0.0
 beautifulsoup4==4.12.2
 pillow==10.0.0
 lxml==4.9.3
@@ -261,6 +262,13 @@ EOF
             log_warn "发现concurrent-futures依赖，这在Python 3.x中是不需要的，正在移除..."
             sed -i '/concurrent-futures/d' requirements.txt
             log_info "已移除concurrent-futures依赖"
+        fi
+        
+        # 检查并添加urllib3版本限制
+        if ! grep -q "urllib3<2.0.0" requirements.txt; then
+            log_warn "添加urllib3版本限制，以兼容旧版OpenSSL..."
+            echo "urllib3<2.0.0" >> requirements.txt
+            log_info "已添加urllib3版本限制"
         fi
     fi
     
@@ -298,7 +306,7 @@ EOF
             
             if $ABSOLUTE_PATH/venv/bin/python -c "import $import_name" &> /dev/null; then
                 log_info "核心依赖 $dep 安装成功"
-                break
+                break  # 成功安装后立即跳出循环
             else
                 if [ $i -eq 3 ]; then
                     log_error "核心依赖 $dep 安装失败，尝试使用其他源..."
@@ -600,6 +608,39 @@ download_project() {
     log_info "项目下载完成，开始部署..."
 }
 
+# 修复urllib3版本问题
+fix_urllib3_issue() {
+    log_info "检查并修复urllib3版本问题..."
+    
+    # 获取当前目录的绝对路径
+    ABSOLUTE_PATH=$(pwd)
+    
+    # 检查OpenSSL版本
+    openssl_version=$(openssl version | awk '{print $2}')
+    log_info "当前OpenSSL版本: $openssl_version"
+    
+    # 检查urllib3版本
+    urllib3_version=$($ABSOLUTE_PATH/venv/bin/pip show urllib3 | grep Version | awk '{print $2}')
+    log_info "当前urllib3版本: $urllib3_version"
+    
+    # 如果urllib3版本是2.x，则降级到1.26.x
+    if [[ $urllib3_version == 2.* ]]; then
+        log_warn "检测到urllib3 v2.x，但系统OpenSSL版本可能不兼容"
+        log_info "降级urllib3到1.26.18版本..."
+        $ABSOLUTE_PATH/venv/bin/pip install urllib3==1.26.18 --force-reinstall
+        
+        # 重新安装requests以确保兼容性
+        log_info "重新安装requests以确保兼容性..."
+        $ABSOLUTE_PATH/venv/bin/pip install requests --force-reinstall
+        
+        # 验证安装
+        new_urllib3_version=$($ABSOLUTE_PATH/venv/bin/pip show urllib3 | grep Version | awk '{print $2}')
+        log_info "修复后urllib3版本: $new_urllib3_version"
+    else
+        log_info "urllib3版本兼容，无需修复"
+    fi
+}
+
 # 主函数
 main() {
     log_info "开始部署网易新闻爬虫系统..."
@@ -624,6 +665,9 @@ main() {
     
     # 安装依赖
     install_dependencies
+    
+    # 修复urllib3版本问题
+    fix_urllib3_issue
     
     # 创建目录（如果不存在）
     create_directories

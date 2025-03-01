@@ -55,7 +55,37 @@ class NeteaseNewsSpider(CrawlSpider):
     def start_requests(self):
         """开始请求"""
         for url in self.start_urls:
-            yield scrapy.Request(url, callback=self.parse, dont_filter=True)
+            yield scrapy.Request(url, dont_filter=True)
+    
+    def parse(self, response):
+        """解析首页和分类页面，提取新闻链接"""
+        logger.info(f"正在解析页面: {response.url}")
+        
+        # 提取新闻链接
+        news_links = response.css('a.news-item-title::attr(href), a.news-title::attr(href), a.title::attr(href)').getall()
+        
+        # 如果没有找到链接，尝试其他选择器
+        if not news_links:
+            news_links = response.css('a::attr(href)').getall()
+            # 过滤链接，只保留可能是新闻的链接
+            news_links = [link for link in news_links if re.search(r'news\.163\.com/\d+/\d+/\d+/.*\.html', link)]
+        
+        # 处理提取到的链接
+        for link in news_links:
+            # 处理相对URL
+            if not link.startswith(('http://', 'https://')):
+                link = urljoin(response.url, link)
+            
+            # 过滤链接
+            if any(domain in link for domain in self.allowed_domains):
+                yield scrapy.Request(link, callback=self.parse_news)
+        
+        # 提取下一页链接
+        next_page = response.css('a.next::attr(href), a.pagination_next::attr(href)').get()
+        if next_page:
+            if not next_page.startswith(('http://', 'https://')):
+                next_page = urljoin(response.url, next_page)
+            yield scrapy.Request(next_page, callback=self.parse)
     
     def parse_news(self, response):
         """解析新闻页面"""

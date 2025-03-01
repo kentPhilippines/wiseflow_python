@@ -48,11 +48,6 @@ def setup_logger(name=None, level=None, log_file=None, max_bytes=10*1024*1024, b
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # 创建控制台处理器
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-    
     # 创建文件处理器
     if log_file:
         # 确保日志目录存在
@@ -105,11 +100,6 @@ def setup_daily_logger(name=None, level=None, log_file=None, backup_count=30):
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
-    # 创建控制台处理器
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
     
     # 创建文件处理器
     if log_file:

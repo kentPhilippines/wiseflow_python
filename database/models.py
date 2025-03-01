@@ -8,7 +8,7 @@
 import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Table, Float
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from config.db_config import TABLE_PREFIX
 
@@ -117,7 +117,9 @@ class Category(Base):
     
     # 关联关系
     news = relationship('News', back_populates='category')
-    children = relationship('Category', backref=ForeignKey('parent'))
+    children = relationship('Category', 
+                           backref=backref('parent', remote_side=[id]),
+                           foreign_keys=[parent_id])
     
     def __repr__(self):
         return f'<Category {self.id}: {self.name}>'

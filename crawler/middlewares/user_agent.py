@@ -7,7 +7,9 @@ User-Agent中间件
 
 import logging
 import random
+from collections import defaultdict
 from scrapy import signals
+from scrapy.exceptions import IgnoreRequest
 
 from config.settings import USER_AGENT_SETTINGS
 
@@ -22,7 +24,11 @@ class RandomUserAgentMiddleware:
         self.enabled = USER_AGENT_SETTINGS['enabled']
         self.user_agents = USER_AGENT_SETTINGS['user_agents']
         self.count = 0
-        logger.info(f"随机User-Agent中间件初始化，启用状态: {self.enabled}")
+        # 添加URL计数器，记录每个URL的尝试次数
+        self.url_attempts = defaultdict(int)
+        # 设置最大尝试次数
+        self.max_attempts_per_url = 20
+        logger.info(f"随机User-Agent中间件初始化，启用状态: {self.enabled}，每个URL最大尝试次数: {self.max_attempts_per_url}")
     
     @classmethod
     def from_crawler(cls, crawler):
@@ -36,6 +42,17 @@ class RandomUserAgentMiddleware:
         """处理请求"""
         if not self.enabled or not self.user_agents:
             return None
+            
+        # 获取请求URL
+        url = request.url
+        
+        # 增加URL尝试次数
+        self.url_attempts[url] += 1
+        
+        # 如果超过最大尝试次数，放弃请求
+        if self.url_attempts[url] > self.max_attempts_per_url:
+            logger.warning(f"URL {url} 已尝试 {self.url_attempts[url]-1} 次，超过最大尝试次数，放弃请求")
+            raise IgnoreRequest(f"超过最大尝试次数 {self.max_attempts_per_url}")
             
         # 随机选择一个User-Agent
         user_agent = random.choice(self.user_agents)
@@ -53,4 +70,4 @@ class RandomUserAgentMiddleware:
     
     def spider_closed(self, spider):
         """爬虫结束时的回调"""
-        logger.info(f"随机User-Agent中间件关闭，共切换User-Agent {self.count} 次") 
+        logger.info(f"随机User-Agent中间件关闭，共切换User-Agent {self.count} 次，处理URL数: {len(self.url_attempts)}") 

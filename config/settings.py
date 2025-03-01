@@ -20,10 +20,10 @@ CRAWLER_SETTINGS = {
     'name': 'netease_news_spider',
     
     # 并发请求数
-    'concurrent_requests': 16,
+    'concurrent_requests': 32,
     
     # 下载延迟（秒）
-    'download_delay': 1.5,
+    'download_delay': 1.0,
     
     # 随机下载延迟
     'randomize_download_delay': True,
@@ -68,13 +68,13 @@ CRAWLER_SETTINGS = {
     'autothrottle_enabled': True,
     
     # 自动限速初始延迟
-    'autothrottle_start_delay': 5,
+    'autothrottle_start_delay': 3,
     
     # 自动限速最大延迟
-    'autothrottle_max_delay': 60,
+    'autothrottle_max_delay': 30,
     
     # 自动限速目标并发数
-    'autothrottle_target_concurrency': 1.0,
+    'autothrottle_target_concurrency': 2.0,
     
     # 是否显示限速统计
     'autothrottle_debug': False,
@@ -250,4 +250,19 @@ NEWS_CATEGORIES = [
     {'id': 8, 'name': '娱乐', 'url': 'https://ent.163.com/'},
     {'id': 9, 'name': '汽车', 'url': 'https://auto.163.com/'},
     {'id': 10, 'name': '房产', 'url': 'https://house.163.com/'},
+    # 添加更多分类
+    {'id': 11, 'name': '教育', 'url': 'https://edu.163.com/'},
+    {'id': 12, 'name': '健康', 'url': 'https://jiankang.163.com/'},
+    {'id': 13, 'name': '旅游', 'url': 'https://travel.163.com/'},
+    {'id': 14, 'name': '政务', 'url': 'https://gov.163.com/'},
+    {'id': 15, 'name': '数据', 'url': 'https://data.163.com/'},
+    {'id': 16, 'name': '女性', 'url': 'https://lady.163.com/'},
+    {'id': 17, 'name': '手机', 'url': 'https://mobile.163.com/'},
+    {'id': 18, 'name': '彩票', 'url': 'https://caipiao.163.com/'},
+    {'id': 19, 'name': '直播', 'url': 'https://live.163.com/'},
+    {'id': 20, 'name': '本地', 'url': 'https://news.163.com/local/'},
+    {'id': 21, 'name': '热点', 'url': 'https://news.163.com/hot/'},
+    {'id': 22, 'name': '排行', 'url': 'https://news.163.com/rank/'},
+    {'id': 23, 'name': '专题', 'url': 'https://news.163.com/special/'},
+    {'id': 24, 'name': '订阅', 'url': 'https://dy.163.com/'},
 ] 

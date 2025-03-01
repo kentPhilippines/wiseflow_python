@@ -34,6 +34,11 @@ logger = setup_logger(
     log_file=os.path.join(BASE_DIR, 'logs', 'run_crawler.log')
 )
 
+# 设置Scrapy日志输出到文件而不是控制台
+import logging
+# 移除这行代码，不再将scrapy日志传播到控制台
+# logging.getLogger('scrapy').propagate = True
+
 
 def get_scrapy_settings():
     """获取Scrapy设置"""
@@ -52,7 +57,10 @@ def get_scrapy_settings():
     settings.set('COOKIES_ENABLED', CRAWLER_SETTINGS['cookies_enabled'])
     settings.set('TELNETCONSOLE_ENABLED', CRAWLER_SETTINGS['telnetconsole_enabled'])
     settings.set('LOG_LEVEL', CRAWLER_SETTINGS['log_level'])
+    # 恢复LOG_FILE设置，使日志输出到文件
     settings.set('LOG_FILE', CRAWLER_SETTINGS['log_file'])
+    # 禁用日志到控制台
+    settings.set('LOG_STDOUT', False)
     
     # 自动限速设置
     settings.set('AUTOTHROTTLE_ENABLED', CRAWLER_SETTINGS['autothrottle_enabled'])
@@ -70,7 +78,8 @@ def get_scrapy_settings():
     # 管道设置
     settings.set('ITEM_PIPELINES', {
         'crawler.pipelines.news_pipeline.NeteaseNewsPipeline': 300,
-        'crawler.pipelines.image_pipeline.NeteaseImagePipeline': 200,
+        # 禁用图片下载管道
+        # 'crawler.pipelines.image_pipeline.NeteaseImagePipeline': 200,
     })
     
     # 图片设置

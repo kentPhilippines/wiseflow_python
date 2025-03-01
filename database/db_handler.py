@@ -7,7 +7,7 @@
 
 import logging
 from contextlib import contextmanager
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -131,14 +131,14 @@ class DatabaseHandler:
         """执行原生SQL"""
         with self.engine.connect() as conn:
             if params:
-                return conn.execute(sql, params)
-            return conn.execute(sql)
+                return conn.execute(text(sql), params)
+            return conn.execute(text(sql))
     
     def check_connection(self):
         """检查数据库连接"""
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             return True
         except SQLAlchemyError as e:
             logger.error(f"数据库连接检查失败: {str(e)}")

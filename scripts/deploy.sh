@@ -254,6 +254,8 @@ schedule==1.2.0
 EOF
         log_info "已创建基本的requirements.txt文件"
     else
+        log_info "检测到已存在requirements.txt文件，使用现有文件"
+        
         # 检查并移除concurrent-futures依赖
         if grep -q "concurrent-futures" requirements.txt; then
             log_warn "发现concurrent-futures依赖，这在Python 3.x中是不需要的，正在移除..."
@@ -276,6 +278,12 @@ EOF
     
     # 先安装核心依赖
     log_info "安装核心依赖..."
+    # 定义核心依赖包名和对应的导入模块名
+    declare -A CORE_DEPS_MAP
+    CORE_DEPS_MAP["pymysql"]="pymysql"
+    CORE_DEPS_MAP["python-dotenv"]="dotenv"
+    CORE_DEPS_MAP["requests"]="requests"
+    
     CORE_DEPS=("pymysql" "python-dotenv" "requests")
     
     for dep in "${CORE_DEPS[@]}"; do
@@ -285,7 +293,10 @@ EOF
             log_info "尝试安装 $dep (尝试 $i/3)..."
             $ABSOLUTE_PATH/venv/bin/pip install $dep -i https://pypi.org/simple
             
-            if $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+            # 获取对应的导入模块名
+            import_name=${CORE_DEPS_MAP[$dep]}
+            
+            if $ABSOLUTE_PATH/venv/bin/python -c "import $import_name" &> /dev/null; then
                 log_info "核心依赖 $dep 安装成功"
                 break
             else
@@ -294,7 +305,7 @@ EOF
                     # 尝试使用其他源
                     $ABSOLUTE_PATH/venv/bin/pip install $dep -i https://mirrors.aliyun.com/pypi/simple/
                     
-                    if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+                    if ! $ABSOLUTE_PATH/venv/bin/python -c "import $import_name" &> /dev/null; then
                         log_error "核心依赖 $dep 安装失败，请检查网络连接或手动安装"
                     else
                         log_info "使用备用源安装 $dep 成功"
@@ -325,7 +336,10 @@ EOF
     MISSING_DEPS=()
     
     for dep in "${CORE_DEPS[@]}"; do
-        if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+        # 获取对应的导入模块名
+        import_name=${CORE_DEPS_MAP[$dep]}
+        
+        if ! $ABSOLUTE_PATH/venv/bin/python -c "import $import_name" &> /dev/null; then
             MISSING_DEPS+=("$dep")
         fi
     done
@@ -347,24 +361,37 @@ EOF
                 yum install -y python3-$dep
             done
         fi
-
         
         # 再次检查
         MISSING_DEPS=()
         for dep in "${CORE_DEPS[@]}"; do
-            if ! $ABSOLUTE_PATH/venv/bin/python -c "import $dep" &> /dev/null; then
+            # 获取对应的导入模块名
+            import_name=${CORE_DEPS_MAP[$dep]}
+            
+            if ! $ABSOLUTE_PATH/venv/bin/python -c "import $import_name" &> /dev/null; then
                 MISSING_DEPS+=("$dep")
             fi
         done
         
         if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
             log_error "仍然无法安装以下核心依赖: ${MISSING_DEPS[*]}"
-            log_error "请手动安装这些依赖后继续"
+            log_warn "尝试直接安装依赖，不检查导入..."
+            
+            # 最后尝试直接安装，不检查导入
+            for dep in "${MISSING_DEPS[@]}"; do
+                log_info "强制安装 $dep..."
+                $ABSOLUTE_PATH/venv/bin/pip install --force-reinstall $dep
+            done
+            
+            # 如果仍然失败，提供手动安装命令
+            log_warn "已尝试所有自动安装方法，如果仍然失败，请手动安装这些依赖"
             log_info "您可以尝试以下命令手动安装:"
             for dep in "${MISSING_DEPS[@]}"; do
                 echo "$ABSOLUTE_PATH/venv/bin/pip install $dep -i https://pypi.org/simple"
             done
-            exit 1
+            
+            # 不退出，继续执行后续步骤
+            log_warn "将继续执行后续步骤，但可能会在使用这些依赖时出错"
         fi
     fi
     
@@ -429,11 +456,33 @@ init_database() {
 
 # 创建目录
 create_directories() {
-    log_info "创建必要目录..."
-    mkdir -p logs
-    mkdir -p data/images
-    mkdir -p data/exports
-    log_info "目录创建成功"
+    log_info "检查必要目录..."
+    
+    # 检查并创建logs目录
+    if [ ! -d "logs" ]; then
+        log_info "创建logs目录..."
+        mkdir -p logs
+    else
+        log_info "logs目录已存在，跳过创建"
+    fi
+    
+    # 检查并创建data/images目录
+    if [ ! -d "data/images" ]; then
+        log_info "创建data/images目录..."
+        mkdir -p data/images
+    else
+        log_info "data/images目录已存在，跳过创建"
+    fi
+    
+    # 检查并创建data/exports目录
+    if [ ! -d "data/exports" ]; then
+        log_info "创建data/exports目录..."
+        mkdir -p data/exports
+    else
+        log_info "data/exports目录已存在，跳过创建"
+    fi
+    
+    log_info "必要目录检查完成"
 }
 
 # 设置定时任务
@@ -509,82 +558,47 @@ test_run() {
 
 # 下载项目函数
 download_project() {
-    # 如果当前目录不是项目目录，则下载项目
-    if [ ! -f "README.md" ] || ! grep -q "网易新闻爬虫系统" "README.md" 2>/dev/null; then
-        log_info "下载项目文件..."
-        
-        # 创建临时工作目录
-        WORK_DIR="/tmp/wiseflow_python"
-        mkdir -p $WORK_DIR
-        cd $WORK_DIR
-        
-        # 检查并安装curl
-        check_command curl curl
-        
-        # 检查并安装unzip
-        check_command unzip unzip
-        
-        # 下载项目
-        curl -L https://github.com/kentPhilippines/wiseflow_python/archive/refs/heads/main.zip -o wiseflow_python.zip
-        
-        # 解压项目
-        unzip -o wiseflow_python.zip
-        
-        # 进入项目目录
-        cd wiseflow_python-main || {
-            # 如果目录不存在，创建基本项目结构
-            log_warn "无法进入项目目录，创建基本项目结构..."
-            mkdir -p wiseflow_python
-            cd wiseflow_python
-            
-            # 创建基本项目结构
-            mkdir -p config database scripts data/exports data/images logs
-            
-            # 创建README文件
-            cat > README.md << EOF
-# 网易新闻爬虫系统
-
-这是一个用于抓取网易新闻数据的爬虫系统。
-
-## 功能特点
-
-- 抓取网易新闻数据，包括标题、内容、图片和标签
-- 数据存储到MySQL数据库
-- 支持数据导出为JSON和CSV格式
-- 支持定时抓取
-- 支持断点续爬
-- 多线程抓取
-- IP和User-Agent轮换
-
-## 使用方法
-
-1. 运行一次爬虫: \${INSTALL_PATH}/start.sh --once
-2. 按计划运行爬虫: \${INSTALL_PATH}/start.sh --schedule
-3. 导出数据: \${INSTALL_PATH}/venv/bin/python \${INSTALL_PATH}/scripts/export_data.py --format json
-
-## 部署方法
-
-使用一键部署脚本:
-
-\`\`\`bash
-curl -s -L https://raw.githubusercontent.com/kentPhilippines/wiseflow_python/main/scripts/deploy.sh | bash
-\`\`\`
-EOF
-
-            # 替换README中的安装路径变量
-            sed -i "s|\\\${INSTALL_PATH}|$ABSOLUTE_PATH|g" README.md
-        }
-        
-        # 设置部署脚本可执行权限
-        chmod +x scripts/deploy.sh 2>/dev/null || true
-        
-        log_info "项目下载完成，开始部署..."
+    # 检查是否已经在项目目录中
+    if [ -f "README.md" ] && grep -q "网易新闻爬虫系统" "README.md" 2>/dev/null; then
+        log_info "检测到已在项目目录中，跳过下载步骤"
+        return 0
     fi
+    
+    # 检查是否在项目子目录中
+    if [ -d "../config" ] && [ -d "../database" ] && [ -d "../scripts" ]; then
+        log_info "检测到在项目子目录中，切换到项目根目录"
+        cd ..
+        return 0
+    fi
+    
+    # 如果不在项目目录中，则下载项目
+    log_info "下载项目文件..."
+    
+    # 创建临时工作目录
+    WORK_DIR="/tmp/wiseflow_python"
+    mkdir -p $WORK_DIR
+    cd $WORK_DIR
+    
+    # 检查并安装curl
+    check_command curl curl
+    
+    # 检查并安装unzip
+    check_command unzip unzip
+    
+    # 下载项目
+    curl -L https://github.com/kentPhilippines/wiseflow_python/archive/refs/heads/main.zip -o wiseflow_python.zip
+    
+    # 解压项目
+    unzip -o wiseflow_python.zip
+    
+    # 进入项目目录
+    cd wiseflow_python-main || {
+        log_error "无法进入项目目录，请检查下载是否成功"
+        exit 1
+    }
+    
+    log_info "项目下载完成，开始部署..."
 }
-
-
-
-
 
 # 主函数
 main() {
@@ -611,7 +625,7 @@ main() {
     # 安装依赖
     install_dependencies
     
-    # 创建目录
+    # 创建目录（如果不存在）
     create_directories
     
     # 配置数据库
@@ -623,8 +637,12 @@ main() {
     # 设置定时任务
     setup_cron
     
-    # 创建启动脚本
-    create_start_script
+    # 创建启动脚本（如果不存在）
+    if [ ! -f "start.sh" ]; then
+        create_start_script
+    else
+        log_info "启动脚本已存在，跳过创建"
+    fi
     
     # 测试运行
     test_run

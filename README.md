@@ -44,16 +44,20 @@ wiseflow_python/
 │   └── images/              # 图片存储目录
 ├── scripts/                 # 脚本目录
 │   ├── run_crawler.py       # 运行爬虫脚本
-│   └── export_data.py       # 数据导出脚本
+│   ├── export_data.py       # 数据导出脚本
+│   └── deploy.sh            # 一键部署脚本
 ├── requirements.txt         # 依赖包列表
 ├── setup.py                 # 安装脚本
 └── README.md                # 项目说明
 ```
 
 ## 安装与配置
+
+### 方法一：手动安装
+
 1. 克隆项目
 ```bash
-git clone [项目地址]
+git clone https://github.com/yourusername/wiseflow_python.git
 cd wiseflow_python
 ```
 
@@ -65,9 +69,44 @@ pip install -r requirements.txt
 3. 配置数据库
 编辑 `config/db_config.py` 文件，设置数据库连接信息。
 
-4. 运行爬虫
+4. 初始化数据库
+```bash
+python -c "from database.db_handler import init_db; init_db()"
+```
+
+5. 运行爬虫
 ```bash
 python scripts/run_crawler.py
+```
+
+### 方法二：一键部署（推荐）
+
+1. 克隆项目
+```bash
+git clone https://github.com/yourusername/wiseflow_python.git
+cd wiseflow_python
+```
+
+2. 运行部署脚本
+```bash
+bash scripts/deploy.sh
+```
+
+部署脚本会自动完成以下操作：
+- 检查Python版本
+- 创建并激活虚拟环境
+- 安装项目依赖
+- 创建必要目录
+- 配置数据库连接
+- 初始化数据库
+- 设置定时任务（可选）
+- 创建启动脚本
+- 测试运行爬虫（可选）
+
+部署完成后，可以使用以下命令运行爬虫：
+```bash
+./start.sh --once      # 运行一次爬虫
+./start.sh --schedule  # 按计划运行爬虫
 ```
 
 ## 数据库设计
@@ -93,6 +132,14 @@ python scripts/run_crawler.py
 - JSON格式
 - XML格式
 - CSV格式
+
+导出数据命令：
+```bash
+python scripts/export_data.py          # 导出所有格式
+python scripts/export_data.py --json   # 仅导出JSON格式
+python scripts/export_data.py --xml    # 仅导出XML格式
+python scripts/export_data.py --csv    # 仅导出CSV格式
+```
 
 ## 维护与监控
 - 日志系统：记录爬虫运行状态和错误信息

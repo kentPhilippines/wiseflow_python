@@ -347,6 +347,7 @@ EOF
                 yum install -y python3-$dep
             done
         fi
+
         
         # 再次检查
         MISSING_DEPS=()
@@ -580,6 +581,10 @@ EOF
         log_info "项目下载完成，开始部署..."
     fi
 }
+
+
+
+
 
 # 主函数
 main() {

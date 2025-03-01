@@ -100,10 +100,71 @@ check_command() {
 check_python_version() {
     python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
     if [[ $(echo "$python_version < 3.8" | bc) -eq 1 ]]; then
-        log_error "Python版本需要 >= 3.8，当前版本: $python_version"
-        exit 1
+        log_warn "Python版本需要 >= 3.8，当前版本: $python_version"
+        log_info "尝试安装更高版本的Python..."
+        
+        OS=$(detect_os)
+        if [[ $OS == *"Ubuntu"* ]] || [[ $OS == *"Debian"* ]]; then
+            log_info "在Ubuntu/Debian上安装Python 3.8..."
+            apt update -y
+            apt install -y software-properties-common
+            add-apt-repository -y ppa:deadsnakes/ppa
+            apt update -y
+            apt install -y python3.8 python3.8-dev python3.8-venv python3.8-distutils
+            
+            # 创建软链接
+            update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1
+            
+            # 安装pip
+            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+            python3.8 get-pip.py
+            rm get-pip.py
+            
+            # 检查安装结果
+            python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+            if [[ $(echo "$python_version < 3.8" | bc) -eq 1 ]]; then
+                log_error "Python 3.8安装失败，请手动安装"
+                exit 1
+            fi
+            log_info "Python 3.8安装成功，当前版本: $python_version"
+            
+        elif [[ $OS == *"CentOS"* ]] || [[ $OS == *"Red Hat"* ]] || [[ $OS == *"Fedora"* ]]; then
+            log_info "在CentOS/RHEL上安装Python 3.8..."
+            
+            # 安装开发工具
+            yum groupinstall -y "Development Tools"
+            yum install -y openssl-devel bzip2-devel libffi-devel
+            
+            # 下载并编译Python 3.8
+            cd /tmp
+            curl -O https://www.python.org/ftp/python/3.8.12/Python-3.8.12.tgz
+            tar -xzf Python-3.8.12.tgz
+            cd Python-3.8.12
+            ./configure --enable-optimizations
+            make altinstall
+            
+            # 创建软链接
+            ln -sf /usr/local/bin/python3.8 /usr/bin/python3
+            ln -sf /usr/local/bin/pip3.8 /usr/bin/pip3
+            
+            # 返回原目录
+            cd -
+            
+            # 检查安装结果
+            python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+            if [[ $(echo "$python_version < 3.8" | bc) -eq 1 ]]; then
+                log_error "Python 3.8安装失败，请手动安装"
+                exit 1
+            fi
+            log_info "Python 3.8安装成功，当前版本: $python_version"
+            
+        else
+            log_error "不支持的操作系统: $OS，请手动安装Python 3.8或更高版本"
+            exit 1
+        fi
+    else
+        log_info "Python版本检查通过: $python_version"
     fi
-    log_info "Python版本检查通过: $python_version"
 }
 
 # 创建虚拟环境

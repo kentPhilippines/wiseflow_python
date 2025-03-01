@@ -646,10 +646,11 @@ main() {
     
     # 测试运行
     test_run
-    
+
     # 获取当前目录的绝对路径（确保在最后输出时也有）
     ABSOLUTE_PATH=$(pwd)
-    
+    # 获取当前目录的绝对路径（确保在最后输出时也有）
+    ABSOLUTE_PATH=$(pwd)
     log_info "网易新闻爬虫系统部署完成!"
     log_info "使用方法:"
     log_info "1. 运行一次爬虫: $ABSOLUTE_PATH/start.sh --once"
